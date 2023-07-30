@@ -1,0 +1,56 @@
+name: Main
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v2
+
+    - name: Get changed files
+      id: changed-files
+      uses: jitterbit/get-changed-files@v1
+
+    - name: Check if setup.py was modified
+      id: check-setup-py
+      run: |
+        if echo "${{ steps.changed-files.outputs.all }}" | grep -q "setup.py"; then
+          echo "::set-output name=changed::true"
+        else
+          echo "::set-output name=changed::false"
+        fi
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: |
+        cd python
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run tests
+      run: |
+        cd python
+        python -m unittest discover -s tests -v
+
+    - name: Build package
+      if: steps.check-setup-py.outputs.changed == 'true'
+      run: |
+        cd python
+        pip install setuptools wheel twine
+        python setup.py sdist bdist_wheel
+
+    - name: Publish package to PyPI
+      if: steps.check-setup-py.outputs.changed == 'true'
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.PYPI_TOKEN }}
+        packages-dir: python/dist/
